@@ -12,8 +12,10 @@
   const STORAGE_KEY_MAC = 'sinilink_ble_mac';
   const DEFAULT_MAC = '49:25:2B:E5:25:56';
   const SERVICE_UUID = '0000ae00-0000-1000-8000-00805f9b34fb';
-  const WRITE_CHAR_UUID = '0000ae03-0000-1000-8000-00805f9b34fb';
-  const NOTIFY_CHAR_UUID = '0000ae04-0000-1000-8000-00805f9b34fb';
+  const CHAR_AE10 = '0000ae10-0000-1000-8000-00805f9b34fb'; // Primary Write (Sinilink Standard)
+  const CHAR_AE01 = '0000ae01-0000-1000-8000-00805f9b34fb'; // Auxiliary Write (Serial passthrough)
+  const CHAR_AE03 = '0000ae03-0000-1000-8000-00805f9b34fb'; // Alternate
+  const NOTIFY_CHAR_UUID = '0000ae04-0000-1000-8000-00805f9b34fb'; // Real-time Telemetry Notify
 
   // =========================================================================
   // 1. MediaSessionBridge (Android & Web Now Playing Sync)
@@ -243,18 +245,43 @@
         async write(bytes) {
           const uint8 = new Uint8Array(bytes);
           const dataView = new DataView(uint8.buffer);
+          
+          // Pada hardware Sinilink XY-C100L / JieLi AC69xx:
+          // Perintah WAJIB dikirim menggunakan writeWithoutResponse (NO_RESPONSE).
+          // 0xAE10 adalah port utama kontroler Sinilink.
+          // 0xAE01 adalah port passthrough serial JieLi.
+          
+          let sent = false;
+
+          // 1. Tulis ke 0xAE10 (Standar Utama Sinilink)
           try {
-            await ble.write(targetDeviceId, SERVICE_UUID, WRITE_CHAR_UUID, dataView);
-          } catch (wErr1) {
+            await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, CHAR_AE10, dataView);
+            sent = true;
+          } catch (e1) {
+            console.warn('[BLEAdapter] writeWithoutResponse 0xAE10 fallback to write:', e1);
             try {
-              await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, WRITE_CHAR_UUID, dataView);
-            } catch (wErr2) {
-              try {
-                await ble.write(targetDeviceId, SERVICE_UUID, '0000ae01-0000-1000-8000-00805f9b34fb', dataView);
-              } catch (wErr3) {
-                await ble.write(targetDeviceId, SERVICE_UUID, '0000ae10-0000-1000-8000-00805f9b34fb', dataView);
-              }
-            }
+              await ble.write(targetDeviceId, SERVICE_UUID, CHAR_AE10, dataView, { timeout: 800 });
+              sent = true;
+            } catch (e1b) {}
+          }
+
+          // 2. Tulis juga ke 0xAE01 (Standar Serial / Passthrough JieLi)
+          try {
+            await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, CHAR_AE01, dataView);
+            sent = true;
+          } catch (e2) {}
+
+          // 3. Fallback jika user secara manual memilih 0xAE03 atau ALL
+          const userSel = (window.elements && window.elements.selWriteChar) ? window.elements.selWriteChar.value : '';
+          if (userSel === '0xAE03' || userSel === 'ALL') {
+            try {
+              await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, CHAR_AE03, dataView);
+              sent = true;
+            } catch (e3) {}
+          }
+
+          if (!sent) {
+            console.warn('[BLEAdapter] write failed on all ports');
           }
         },
         async disconnect() {
