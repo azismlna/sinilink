@@ -23,13 +23,11 @@ jobs:
         with:
           distribution: 'zulu'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+          cache: 'gradle'
 
       - name: Install Dependencies
         run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor-community/bluetooth-le
+          npm install
 
       - name: Build Web Assets & Sync Android
         run: |
@@ -38,7 +36,6 @@ jobs:
             npx cap add android
           fi
           npx cap sync android
-
 
       - name: Build Debug APK with Gradle
         run: |
