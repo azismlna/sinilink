@@ -168,11 +168,10 @@ function decodePacket(packet) {
     const muteOrEqByte = packet[4];
     const volByte = packet[5];
 
-    // Hardware XY-C100L Max Volume Calibration (0x00 - 0x1D = 29 MAX)
-    // Sesuai hasil uji hardware fisik aktual (frame mentok kanan: 7E 10 1F 01 00 1D ... 95)
-    state.maxVolume = 29;
-    if (elements.knobVolMax) elements.knobVolMax.textContent = '29';
-    if (elements.volumeSlider) elements.volumeSlider.max = '29';
+    // Hardware XY-C100L Max Volume Calibration (0x00 - 0x1D = 29 MAX, displayed as 0-100%)
+    state.maxVolume = 100;
+    if (elements.knobVolMax) elements.knobVolMax.textContent = 'VOLUME';
+    if (elements.volumeSlider) elements.volumeSlider.max = '100';
 
     // Password ASCII byte 6 s/d 9
     const pwdBytes = packet.slice(6, 10);
@@ -197,12 +196,13 @@ function decodePacket(packet) {
       logTerminal('RX', `📡 Balasan Hardware 0xAE04: Konfirmasi Preset EQ Aktif -> ${eqConfirmed.toUpperCase()} (Byte 4: 0x${muteOrEqByte.toString(16).padStart(2, '0')})`, 'success');
     }
 
-    // Perbarui knob volume jika pengguna tidak sedang drag pointer
+    // Perbarui knob volume (0-100%) jika pengguna tidak sedang drag pointer
+    const scaled100 = Math.round((Math.min(29, volByte) / 29) * 100);
     if (!state.isDraggingKnob) {
-      updateVolumeUI(Math.min(29, volByte), false);
+      updateVolumeUI(scaled100, false);
     }
 
-    annotation = `Vol: ${Math.min(29, volByte)}/29 (0x${volByte.toString(16).toUpperCase()}), Tone: ${state.promptTone ? 'ON' : 'OFF'}, Pass: "${passwordStr}"`;
+    annotation = `Vol: ${scaled100}% (HW: 0x${volByte.toString(16).toUpperCase()}), Tone: ${state.promptTone ? 'ON' : 'OFF'}, Pass: "${passwordStr}"`;
   }
   // KASUS B: 15-byte Packet (0x0F) Source/EQ/Volume update
   else if (packet[1] === 0x0F && packetLen >= 15) {
@@ -224,9 +224,10 @@ function decodePacket(packet) {
       updatePlaybackUI(true);
     }
 
-    // Parse Volume
+    // Parse Volume (0-100%)
     if (!state.isDraggingKnob && typeof volByte === 'number') {
-      updateVolumeUI(volByte, false);
+      const scaled100 = Math.round((Math.min(29, volByte) / 29) * 100);
+      updateVolumeUI(scaled100, false);
     }
 
     // Parse EQ

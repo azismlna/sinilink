@@ -42,8 +42,9 @@ async function connectBLE(forceNewScan = false) {
   // 0. Support Capacitor Android Native BLE if running inside APK
   if (window.BLETransportAdapter && window.BLETransportAdapter.isCapacitor()) {
     try {
-      logTerminal('SYS', '⚡ Menghubungkan via Android Native Bluetooth LE Bridge (Capacitor)...', 'info');
+      logTerminal('SYS', '⚡ Membuka dialog pencarian Bluetooth LE (Android Native)...', 'info');
       state.isHandshaking = true;
+      if (elements.btnConnectLabel) elements.btnConnectLabel.textContent = 'Scanning...';
       const nativeSession = await window.BLETransportAdapter.connectCapacitor(
         (dataView) => {
           handleIncomingNotification({ target: { value: dataView } });
@@ -55,16 +56,18 @@ async function connectBLE(forceNewScan = false) {
       state.nativeSession = nativeSession;
       state.isConnected = true;
       state.isHandshaking = false;
-      const mac = window.BLETransportAdapter.getSavedMac();
-      const devName = `Sinilink XY-C100L [${mac.slice(-5)}]`;
+      const devName = nativeSession.name || `Sinilink [${nativeSession.deviceId.slice(-5)}]`;
       if (elements.connectedDeviceName) elements.connectedDeviceName.textContent = devName;
       updateConnectionUI(true);
       logTerminal('SYS', `Tersambung ke ${devName} via Native Capacitor BLE!`, 'success');
       showStudioToast('Tersambung (Native BLE)', devName, 'success');
       return;
     } catch (capErr) {
-      logTerminal('SYS', `Capacitor BLE error: ${capErr.message || capErr}`, 'error');
+      logTerminal('SYS', `Capacitor BLE: ${capErr.message || capErr}`, 'warn');
+      showStudioToast('Bluetooth BLE', capErr.message || 'Pencarian perangkat dibatalkan', 'warn');
       state.isHandshaking = false;
+      if (elements.btnConnectLabel) elements.btnConnectLabel.textContent = 'Connect BLE';
+      return; // Do not fall through to navigator.bluetooth inside APK
     }
   }
 

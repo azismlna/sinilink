@@ -194,11 +194,11 @@ function updateConnectionUI(connected, deviceName = 'Sinilink-APP') {
 }
 
 /**
- * Update Volume in State and UI
+ * Update Volume in State and UI (0–100 Scale)
  */
 function updateVolumeUI(vol, sendCommand = true) {
-  const maxVol = (typeof MAX_VOLUME !== 'undefined' ? MAX_VOLUME : 29);
-  const clampedVol = Math.max(0, Math.min(maxVol, parseInt(vol)));
+  const maxVol = 100;
+  const clampedVol = Math.max(0, Math.min(maxVol, parseInt(vol) || 0));
   state.volume = clampedVol;
 
   if (clampedVol > 0) {
@@ -212,24 +212,27 @@ function updateVolumeUI(vol, sendCommand = true) {
     if (elements.muteBtnLabel) elements.muteBtnLabel.textContent = 'MUTED';
   }
 
-  // Update Digital Displays
+  // Update Digital Displays (0–100 Scale)
   if (elements.knobVolVal) elements.knobVolVal.textContent = clampedVol;
   if (elements.volumeSlider) elements.volumeSlider.value = clampedVol;
-  const percent = Math.round((clampedVol / maxVol) * 100);
-  if (elements.volPercentLabel) elements.volPercentLabel.textContent = `${percent}%`;
-  if (elements.volHexLabel) elements.volHexLabel.textContent = `0x${clampedVol.toString(16).padStart(2, '0').toUpperCase()}`;
+  if (elements.volPercentLabel) elements.volPercentLabel.textContent = `${clampedVol}%`;
+  if (elements.knobVolMax) elements.knobVolMax.textContent = 'VOLUME';
+
+  // Hardware byte mapping: 0..100 -> 0..29 (0x00 - 0x1D)
+  const hwVol = Math.round((clampedVol / 100) * 29);
+  if (elements.volHexLabel) elements.volHexLabel.textContent = `0x${hwVol.toString(16).padStart(2, '0').toUpperCase()}`;
   
-  // Approximate dB Gain display (0.0 dB at 29 MAX / 0x1D)
-  const db = clampedVol === maxVol ? '0.0 dB' : (clampedVol === 0 ? '-∞ dB' : `${((clampedVol - maxVol) * 1.5).toFixed(1)} dB`);
+  // Approximate dB Gain display (0.0 dB at 100% / 29 MAX)
+  const db = clampedVol === 100 ? '0.0 dB' : (clampedVol === 0 ? '-∞ dB' : `${((clampedVol - 100) * 0.4).toFixed(1)} dB`);
   if (elements.volDbLabel) elements.volDbLabel.textContent = db;
 
   // Update Rotary Knob Needle & SVG Arc (-135deg to +135deg)
-  const angle = -135 + (clampedVol / maxVol) * 270;
+  const angle = -135 + (clampedVol / 100) * 270;
   if (elements.knobBody) elements.knobBody.style.transform = `rotate(${angle}deg)`;
 
   // SVG Arc stroke-dashoffset: 447.67 is 0%, 0 is 100%
   const maxOffset = 447.67;
-  const progressFraction = clampedVol / maxVol;
+  const progressFraction = clampedVol / 100;
   const currentOffset = maxOffset - (progressFraction * maxOffset);
   if (elements.knobSvgProgress) elements.knobSvgProgress.style.strokeDashoffset = currentOffset;
 
@@ -237,8 +240,8 @@ function updateVolumeUI(vol, sendCommand = true) {
   if (sendCommand) {
     clearTimeout(state.writeDebounceTimer);
     state.writeDebounceTimer = setTimeout(() => {
-      const packet = buildVolumePacket(clampedVol);
-      sendPacketToAmp(packet, `Set Volume ${clampedVol}/${maxVol}`);
+      const packet = buildVolumePacket(hwVol);
+      sendPacketToAmp(packet, `Set Volume ${clampedVol}% (0x${hwVol.toString(16).toUpperCase()})`);
     }, 35);
   }
 }
@@ -251,7 +254,7 @@ function toggleMute() {
     state.savedVolume = state.volume;
     updateVolumeUI(0, true);
   } else {
-    const restore = state.savedVolume > 0 ? state.savedVolume : 15;
+    const restore = state.savedVolume > 0 ? state.savedVolume : 80;
     updateVolumeUI(restore, true);
   }
 }
@@ -653,7 +656,7 @@ function setupRotaryKnob() {
     if (deltaAngle > 180) deltaAngle -= 360;
     if (deltaAngle < -180) deltaAngle += 360;
 
-    const maxVol = state.maxVolume || 29;
+    const maxVol = 100;
     const degPerStep = 270 / maxVol;
     const stepChange = Math.round(deltaAngle / degPerStep);
     const newVol = Math.max(0, Math.min(maxVol, startVol + stepChange));

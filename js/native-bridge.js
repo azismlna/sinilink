@@ -123,7 +123,11 @@
     },
 
     getBlePlugin() {
-      if (this.isCapacitor() && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
+      if (window.capacitorCommunityBluetoothLe && window.capacitorCommunityBluetoothLe.BleClient) {
+        return window.capacitorCommunityBluetoothLe.BleClient;
+      }
+      if (window.BleClient) return window.BleClient;
+      if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.BluetoothLe) {
         return window.Capacitor.Plugins.BluetoothLe;
       }
       return null;
@@ -147,7 +151,7 @@
       const ble = this.getBlePlugin();
       if (!ble) return false;
       try {
-        await ble.initialize();
+        await ble.initialize({ androidNeverForLocation: false });
         return true;
       } catch (e) {
         console.warn('[BLEAdapter] Capacitor BLE init failed:', e);
@@ -157,39 +161,99 @@
 
     async connectCapacitor(onNotify, onDisconnect) {
       const ble = this.getBlePlugin();
-      if (!ble) throw new Error('Capacitor BluetoothLe plugin not available');
+      if (!ble) throw new Error('Capacitor Bluetooth LE plugin tidak tersedia');
 
-      const targetDeviceId = this.getSavedMac();
-      console.log(`[BLEAdapter] Connecting via Capacitor BLE to ${targetDeviceId}...`);
+      // 1. Inisialisasi stack Bluetooth LE dan minta izin runtime jika belum
+      try {
+        await ble.initialize({ androidNeverForLocation: false });
+      } catch (initErr) {
+        console.warn('[BLEAdapter] initialize info:', initErr);
+      }
 
-      await ble.connect({ deviceId: targetDeviceId });
-
-      // Start Notifications on 0xAE04
-      await ble.startNotifications({
-        deviceId: targetDeviceId,
-        service: SERVICE_UUID,
-        characteristic: NOTIFY_CHAR_UUID
-      }, (result) => {
-        if (result && result.value) {
-          // result.value is a DataView or Base64 string depending on plugin version
-          const dataView = typeof result.value === 'string'
-            ? new DataView(Uint8Array.from(atob(result.value), c => c.charCodeAt(0)).buffer)
-            : result.value;
-          if (onNotify) onNotify(dataView);
+      // 2. Pastikan Bluetooth aktif di HP
+      try {
+        const isEnabledResult = await ble.isEnabled();
+        if (isEnabledResult && isEnabledResult.value === false) {
+          await ble.requestEnable();
         }
-      });
+      } catch (enableErr) {
+        console.warn('[BLEAdapter] requestEnable check:', enableErr);
+      }
+
+      // 3. Scan & Tampilkan Dialog Pemilih Perangkat Native Android
+      let targetDevice = null;
+      try {
+        console.log('[BLEAdapter] Membuka scan dialog perangkat Bluetooth...');
+        targetDevice = await ble.requestDevice({
+          optionalServices: [
+            SERVICE_UUID,
+            '0000ae10-0000-1000-8000-00805f9b34fb',
+            '0000ae01-0000-1000-8000-00805f9b34fb',
+            '0000ae03-0000-1000-8000-00805f9b34fb',
+            '0000ae04-0000-1000-8000-00805f9b34fb'
+          ]
+        });
+      } catch (scanErr) {
+        console.warn('[BLEAdapter] requestDevice error/cancel:', scanErr);
+        throw new Error(scanErr.message || 'Pencarian perangkat dibatalkan');
+      }
+
+      if (!targetDevice || !targetDevice.deviceId) {
+        throw new Error('Tidak ada perangkat yang dipilih');
+      }
+
+      const targetDeviceId = targetDevice.deviceId;
+      const targetDeviceName = targetDevice.name || 'Sinilink-APP';
+      this.saveMac(targetDeviceId);
+      console.log(`[BLEAdapter] Menghubungkan ke ${targetDeviceName} (${targetDeviceId})...`);
+
+      // 4. Hubungkan ke perangkat
+      await ble.connect({ deviceId: targetDeviceId, timeout: 10000 });
+
+      // 5. Jalankan notifikasi karakteristik 0xAE04
+      try {
+        await ble.startNotifications({
+          deviceId: targetDeviceId,
+          service: SERVICE_UUID,
+          characteristic: NOTIFY_CHAR_UUID
+        }, (result) => {
+          if (result && result.value) {
+            let dataView;
+            if (result.value instanceof DataView) {
+              dataView = result.value;
+            } else if (typeof result.value === 'string') {
+              dataView = new DataView(Uint8Array.from(atob(result.value), c => c.charCodeAt(0)).buffer);
+            } else if (result.value.buffer) {
+              dataView = new DataView(result.value.buffer);
+            }
+            if (onNotify && dataView) onNotify(dataView);
+          }
+        });
+      } catch (notifErr) {
+        console.warn('[BLEAdapter] startNotifications info:', notifErr);
+      }
 
       return {
         deviceId: targetDeviceId,
+        name: targetDeviceName,
         async write(bytes) {
           const uint8 = new Uint8Array(bytes);
-          const base64 = btoa(String.fromCharCode.apply(null, uint8));
-          await ble.write({
-            deviceId: targetDeviceId,
-            service: SERVICE_UUID,
-            characteristic: WRITE_CHAR_UUID,
-            value: base64
-          });
+          try {
+            await ble.write({
+              deviceId: targetDeviceId,
+              service: SERVICE_UUID,
+              characteristic: WRITE_CHAR_UUID,
+              value: new DataView(uint8.buffer)
+            });
+          } catch (writeErr) {
+            const base64 = btoa(String.fromCharCode.apply(null, uint8));
+            await ble.write({
+              deviceId: targetDeviceId,
+              service: SERVICE_UUID,
+              characteristic: WRITE_CHAR_UUID,
+              value: base64
+            });
+          }
         },
         async disconnect() {
           try {

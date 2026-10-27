@@ -15,8 +15,8 @@ function init() {
   setupRotaryKnob();
   setupVuMeters();
 
-  // 4. Inisialisasi UI state awal
-  updateVolumeUI(27, false);
+  // 4. Inisialisasi UI state awal (0–100 Scale)
+  updateVolumeUI(93, false);
   updateHexInputPreview();
   if (typeof restoreManualEq === 'function') {
     restoreManualEq();

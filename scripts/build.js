@@ -27,4 +27,18 @@ if (fs.existsSync(path.join(rootDir, 'manifest.json'))) {
   }
 });
 
-console.log('✓ Successfully prepared www directory for Capacitor!');
+// Ensure Capacitor core runtime & Bluetooth-le plugin exist in www
+const capCoreSrc = path.join(rootDir, 'node_modules', '@capacitor', 'core', 'dist', 'capacitor.js');
+if (fs.existsSync(capCoreSrc)) {
+  fs.copyFileSync(capCoreSrc, path.join(outDir, 'capacitor.js'));
+  fs.copyFileSync(capCoreSrc, path.join(rootDir, 'capacitor.js'));
+}
+
+const capBleSrc = path.join(rootDir, 'node_modules', '@capacitor-community', 'bluetooth-le', 'dist', 'plugin.js');
+if (fs.existsSync(capBleSrc)) {
+  fs.mkdirSync(path.join(outDir, 'js'), { recursive: true });
+  fs.copyFileSync(capBleSrc, path.join(outDir, 'js', 'capacitor-bluetooth-le.js'));
+  fs.copyFileSync(capBleSrc, path.join(rootDir, 'js', 'capacitor-bluetooth-le.js'));
+}
+
+console.log('✓ Successfully prepared www directory and native Capacitor runtime!');

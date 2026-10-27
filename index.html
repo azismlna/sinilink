@@ -156,10 +156,10 @@
                 <div class="absolute top-2 left-1/2 -translate-x-1/2 w-2 h-4 rounded-full bg-gradient-to-b from-cyan-300 to-cyan-500 shadow-[0_0_10px_#22d3ee]"></div>
               </div>
 
-              <!-- 2. STATIC CENTER DISPLAY LAYER (Always Upright Horizontal) -->
+              <!-- 2. STATIC CENTER DISPLAY LAYER (Always Upright Horizontal, 0-100 Scale) -->
               <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                <span id="knobVolVal" class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white drop-shadow">27</span>
-                <span class="text-[9px] font-mono uppercase tracking-widest text-slate-400 mt-0.5">/ <span id="knobVolMax">29</span> MAX</span>
+                <span id="knobVolVal" class="text-4xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow">93</span>
+                <span id="knobVolMax" class="text-[9px] font-mono uppercase tracking-widest text-slate-400 mt-0.5">VOLUME</span>
                 <span id="volPercentLabel" class="text-[10px] font-mono text-cyan-400 font-bold">93%</span>
               </div>
             </div>
@@ -167,7 +167,7 @@
 
           <!-- Horizontal Slider & Mini VU Meter -->
           <div class="flex flex-col gap-2">
-            <input type="range" id="volumeSlider" min="0" max="29" value="27" class="w-full h-5 cursor-pointer">
+            <input type="range" id="volumeSlider" min="0" max="100" value="93" class="w-full h-5 cursor-pointer">
 
             <!-- Mini Stereo VU Meter -->
             <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/60 border border-slate-800/60">
@@ -676,6 +676,10 @@
       <button id="btnBleHelp" class="hidden"></button>
     </div>
   </div>
+
+  <!-- CAPACITOR NATIVE ANDROID RUNTIME -->
+  <script src="capacitor.js"></script>
+  <script src="js/capacitor-bluetooth-le.js"></script>
 
   <!-- MODULAR JAVASCRIPT APPLICATION LOGIC -->
   <script src="js/constants.js" defer></script>
