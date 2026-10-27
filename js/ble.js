@@ -47,7 +47,7 @@ async function connectBLE(forceNewScan = false) {
       if (elements.btnConnectLabel) elements.btnConnectLabel.textContent = 'Scanning...';
       const nativeSession = await window.BLETransportAdapter.connectCapacitor(
         (dataView) => {
-          handleIncomingNotification({ target: { value: dataView } });
+          handleBleNotification({ target: { value: dataView } });
         },
         () => {
           onDisconnected();
@@ -61,6 +61,9 @@ async function connectBLE(forceNewScan = false) {
       updateConnectionUI(true);
       logTerminal('SYS', `Tersambung ke ${devName} via Native Capacitor BLE!`, 'success');
       showStudioToast('Tersambung (Native BLE)', devName, 'success');
+      setTimeout(() => {
+        queryDeviceStatus();
+      }, 500);
       return;
     } catch (capErr) {
       logTerminal('SYS', `Capacitor BLE: ${capErr.message || capErr}`, 'warn');

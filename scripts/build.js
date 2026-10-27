@@ -36,9 +36,11 @@ if (fs.existsSync(capCoreSrc)) {
 
 const capBleSrc = path.join(rootDir, 'node_modules', '@capacitor-community', 'bluetooth-le', 'dist', 'plugin.js');
 if (fs.existsSync(capBleSrc)) {
+  let content = fs.readFileSync(capBleSrc, 'utf8');
+  content += '\nif (typeof window !== "undefined") {\n  window.capacitorCommunityBluetoothLe = capacitorCommunityBluetoothLe;\n  window.BleClient = capacitorCommunityBluetoothLe ? capacitorCommunityBluetoothLe.BleClient : null;\n}\n';
   fs.mkdirSync(path.join(outDir, 'js'), { recursive: true });
-  fs.copyFileSync(capBleSrc, path.join(outDir, 'js', 'capacitor-bluetooth-le.js'));
-  fs.copyFileSync(capBleSrc, path.join(rootDir, 'js', 'capacitor-bluetooth-le.js'));
+  fs.writeFileSync(path.join(outDir, 'js', 'capacitor-bluetooth-le.js'), content, 'utf8');
+  fs.writeFileSync(path.join(rootDir, 'js', 'capacitor-bluetooth-le.js'), content, 'utf8');
 }
 
 console.log('✓ Successfully prepared www directory and native Capacitor runtime!');

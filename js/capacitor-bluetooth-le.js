@@ -874,3 +874,8 @@ var capacitorCommunityBluetoothLe = (function (exports, core) {
 
 })({}, capacitorExports);
 //# sourceMappingURL=plugin.js.map
+
+if (typeof window !== "undefined") {
+  window.capacitorCommunityBluetoothLe = capacitorCommunityBluetoothLe;
+  window.BleClient = capacitorCommunityBluetoothLe ? capacitorCommunityBluetoothLe.BleClient : null;
+}

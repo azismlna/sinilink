@@ -151,7 +151,7 @@
       const ble = this.getBlePlugin();
       if (!ble) return false;
       try {
-        await ble.initialize({ androidNeverForLocation: false });
+        await ble.initialize({ androidNeverForLocation: true });
         return true;
       } catch (e) {
         console.warn('[BLEAdapter] Capacitor BLE init failed:', e);
@@ -163,17 +163,17 @@
       const ble = this.getBlePlugin();
       if (!ble) throw new Error('Capacitor Bluetooth LE plugin tidak tersedia');
 
-      // 1. Inisialisasi stack Bluetooth LE dan minta izin runtime jika belum
+      // 1. Inisialisasi stack Bluetooth LE (androidNeverForLocation: true)
       try {
-        await ble.initialize({ androidNeverForLocation: false });
+        await ble.initialize({ androidNeverForLocation: true });
       } catch (initErr) {
         console.warn('[BLEAdapter] initialize info:', initErr);
       }
 
       // 2. Pastikan Bluetooth aktif di HP
       try {
-        const isEnabledResult = await ble.isEnabled();
-        if (isEnabledResult && isEnabledResult.value === false) {
+        const isEnabled = await ble.isEnabled();
+        if (isEnabled === false || (isEnabled && isEnabled.value === false)) {
           await ble.requestEnable();
         }
       } catch (enableErr) {
@@ -189,6 +189,7 @@
             SERVICE_UUID,
             '0000ae10-0000-1000-8000-00805f9b34fb',
             '0000ae01-0000-1000-8000-00805f9b34fb',
+            '0000ae02-0000-1000-8000-00805f9b34fb',
             '0000ae03-0000-1000-8000-00805f9b34fb',
             '0000ae04-0000-1000-8000-00805f9b34fb'
           ]
@@ -207,28 +208,31 @@
       this.saveMac(targetDeviceId);
       console.log(`[BLEAdapter] Menghubungkan ke ${targetDeviceName} (${targetDeviceId})...`);
 
-      // 4. Hubungkan ke perangkat
-      await ble.connect({ deviceId: targetDeviceId, timeout: 10000 });
+      // 4. Hubungkan ke perangkat (BleClient expects positional deviceId string!)
+      await ble.connect(targetDeviceId, (disconnectedId) => {
+        console.log('[BLEAdapter] Perangkat terputus:', disconnectedId);
+        if (onDisconnect) onDisconnect();
+      }, { timeout: 10000 });
 
-      // 5. Jalankan notifikasi karakteristik 0xAE04
+      // 5. Jalankan notifikasi karakteristik 0xAE04 (BleClient expects positional args!)
       try {
-        await ble.startNotifications({
-          deviceId: targetDeviceId,
-          service: SERVICE_UUID,
-          characteristic: NOTIFY_CHAR_UUID
-        }, (result) => {
-          if (result && result.value) {
+        await ble.startNotifications(
+          targetDeviceId,
+          SERVICE_UUID,
+          NOTIFY_CHAR_UUID,
+          (value) => {
+            if (!onNotify) return;
             let dataView;
-            if (result.value instanceof DataView) {
-              dataView = result.value;
-            } else if (typeof result.value === 'string') {
-              dataView = new DataView(Uint8Array.from(atob(result.value), c => c.charCodeAt(0)).buffer);
-            } else if (result.value.buffer) {
-              dataView = new DataView(result.value.buffer);
+            if (value instanceof DataView) {
+              dataView = value;
+            } else if (value && value.buffer && value.buffer instanceof ArrayBuffer) {
+              dataView = new DataView(value.buffer, value.byteOffset || 0, value.byteLength || value.buffer.byteLength);
+            } else if (typeof value === 'string') {
+              dataView = new DataView(Uint8Array.from(atob(value), c => c.charCodeAt(0)).buffer);
             }
-            if (onNotify && dataView) onNotify(dataView);
+            if (dataView) onNotify(dataView);
           }
-        });
+        );
       } catch (notifErr) {
         console.warn('[BLEAdapter] startNotifications info:', notifErr);
       }
@@ -238,27 +242,27 @@
         name: targetDeviceName,
         async write(bytes) {
           const uint8 = new Uint8Array(bytes);
+          const dataView = new DataView(uint8.buffer);
           try {
-            await ble.write({
-              deviceId: targetDeviceId,
-              service: SERVICE_UUID,
-              characteristic: WRITE_CHAR_UUID,
-              value: new DataView(uint8.buffer)
-            });
-          } catch (writeErr) {
-            const base64 = btoa(String.fromCharCode.apply(null, uint8));
-            await ble.write({
-              deviceId: targetDeviceId,
-              service: SERVICE_UUID,
-              characteristic: WRITE_CHAR_UUID,
-              value: base64
-            });
+            await ble.write(targetDeviceId, SERVICE_UUID, WRITE_CHAR_UUID, dataView);
+          } catch (wErr1) {
+            try {
+              await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, WRITE_CHAR_UUID, dataView);
+            } catch (wErr2) {
+              try {
+                await ble.write(targetDeviceId, SERVICE_UUID, '0000ae01-0000-1000-8000-00805f9b34fb', dataView);
+              } catch (wErr3) {
+                await ble.write(targetDeviceId, SERVICE_UUID, '0000ae10-0000-1000-8000-00805f9b34fb', dataView);
+              }
+            }
           }
         },
         async disconnect() {
           try {
-            await ble.disconnect({ deviceId: targetDeviceId });
-          } catch (e) {}
+            await ble.disconnect(targetDeviceId);
+          } catch (e) {
+            console.warn('[BLEAdapter] disconnect err:', e);
+          }
           if (onDisconnect) onDisconnect();
         }
       };
