@@ -165,6 +165,11 @@
       const ble = this.getBlePlugin();
       if (!ble) throw new Error('Capacitor Bluetooth LE plugin tidak tersedia');
 
+      // 0. Nonaktifkan antrean blocking agar tidak terjadi freeze jika ada panggilan timeout
+      if (typeof ble.disableQueue === 'function') {
+        try { ble.disableQueue(); } catch (_) {}
+      }
+
       // 1. Inisialisasi stack Bluetooth LE (androidNeverForLocation: true)
       try {
         await ble.initialize({ androidNeverForLocation: true });
@@ -210,18 +215,67 @@
       this.saveMac(targetDeviceId);
       console.log(`[BLEAdapter] Menghubungkan ke ${targetDeviceName} (${targetDeviceId})...`);
 
-      // 4. Hubungkan ke perangkat (BleClient expects positional deviceId string!)
+      // 4. Hubungkan ke perangkat
       await ble.connect(targetDeviceId, (disconnectedId) => {
         console.log('[BLEAdapter] Perangkat terputus:', disconnectedId);
         if (onDisconnect) onDisconnect();
       }, { timeout: 10000 });
 
-      // 5. Jalankan notifikasi karakteristik 0xAE04 (BleClient expects positional args!)
+      // 5. Discovery Service & Karakteristik yang benar-benar ada di modul
+      let writableTargets = [];
+      let notifyTarget = null;
+      try {
+        const services = await ble.getServices(targetDeviceId);
+        console.log('[BLEAdapter] Services ditemukan:', JSON.stringify(services));
+
+        for (const s of (services || [])) {
+          for (const c of (s.characteristics || [])) {
+            const u = (c.uuid || '').toLowerCase();
+            const shortName = u.includes('0000ae') ? '0x' + u.substring(4, 8).toUpperCase() : u.substring(0, 8);
+            const props = c.properties || {};
+
+            if (props.notify) {
+              notifyTarget = { serviceUuid: s.uuid, charUuid: c.uuid, shortName };
+            }
+            if (props.write || props.writeWithoutResponse) {
+              writableTargets.push({
+                serviceUuid: s.uuid,
+                charUuid: c.uuid,
+                shortName,
+                canWrite: !!props.write,
+                canNoResp: !!props.writeWithoutResponse
+              });
+            }
+          }
+        }
+      } catch (svcErr) {
+        console.warn('[BLEAdapter] getServices info:', svcErr);
+      }
+
+      // Fallback jika discovery kosong
+      if (writableTargets.length === 0) {
+        writableTargets = [
+          { serviceUuid: SERVICE_UUID, charUuid: CHAR_AE10, shortName: '0xAE10', canWrite: true, canNoResp: true },
+          { serviceUuid: SERVICE_UUID, charUuid: CHAR_AE03, shortName: '0xAE03', canWrite: false, canNoResp: true },
+          { serviceUuid: SERVICE_UUID, charUuid: CHAR_AE01, shortName: '0xAE01', canWrite: true, canNoResp: true }
+        ];
+      }
+
+      // Log port yang berhasil terdeteksi ke UI terminal log
+      if (typeof logTerminal === 'function') {
+        const foundStr = writableTargets.map(t => `${t.shortName} [${t.canWrite ? 'Write' : ''}${t.canNoResp ? ' NoResp' : ''}]`).join(', ');
+        logTerminal('SYS', `📡 Port Hardware Terdeteksi: ${foundStr}`, 'success');
+      }
+
+      // 6. Jalankan notifikasi karakteristik 0xAE04
+      const actualNotifyService = notifyTarget ? notifyTarget.serviceUuid : SERVICE_UUID;
+      const actualNotifyChar = notifyTarget ? notifyTarget.charUuid : NOTIFY_CHAR_UUID;
+
       try {
         await ble.startNotifications(
           targetDeviceId,
-          SERVICE_UUID,
-          NOTIFY_CHAR_UUID,
+          actualNotifyService,
+          actualNotifyChar,
           (value) => {
             if (!onNotify) return;
             let dataView;
@@ -235,6 +289,7 @@
             if (dataView) onNotify(dataView);
           }
         );
+        console.log('[BLEAdapter] startNotifications aktif pada', actualNotifyChar);
       } catch (notifErr) {
         console.warn('[BLEAdapter] startNotifications info:', notifErr);
       }
@@ -242,46 +297,73 @@
       return {
         deviceId: targetDeviceId,
         name: targetDeviceName,
+        writableTargets,
         async write(bytes) {
           const uint8 = new Uint8Array(bytes);
-          const dataView = new DataView(uint8.buffer);
-          
-          // Pada hardware Sinilink XY-C100L / JieLi AC69xx:
-          // Perintah WAJIB dikirim menggunakan writeWithoutResponse (NO_RESPONSE).
-          // 0xAE10 adalah port utama kontroler Sinilink.
-          // 0xAE01 adalah port passthrough serial JieLi.
-          
-          let sent = false;
+          const framesToSend = [uint8];
 
-          // 1. Tulis ke 0xAE10 (Standar Utama Sinilink)
-          try {
-            await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, CHAR_AE10, dataView);
-            sent = true;
-          } catch (e1) {
-            console.warn('[BLEAdapter] writeWithoutResponse 0xAE10 fallback to write:', e1);
-            try {
-              await ble.write(targetDeviceId, SERVICE_UUID, CHAR_AE10, dataView, { timeout: 800 });
-              sent = true;
-            } catch (e1b) {}
+          // Kompatibilitas Dual Frame:
+          // Jika perintah volume 15-byte (7E 0F 1D <vol> ...), kirim juga frame ringkas 5-byte (7E 05 1D <vol> <cs>)
+          if (uint8.length === 15 && uint8[0] === 0x7E && uint8[1] === 0x0F && uint8[2] === 0x1D) {
+            const vol = uint8[3];
+            const raw5 = [0x7E, 0x05, 0x1D, vol];
+            let cs5 = 0;
+            for (let i = 0; i < raw5.length; i++) cs5 = (cs5 + raw5[i]) & 0xFF;
+            raw5.push(cs5);
+            framesToSend.push(new Uint8Array(raw5));
+          }
+          // Jika perintah transport 5-byte (7E 05 <cmd> 00 <cs>), kirim juga frame extended 15-byte
+          else if (uint8.length === 5 && uint8[0] === 0x7E && uint8[1] === 0x05) {
+            const cmd = uint8[2];
+            const param = uint8[3];
+            const raw15 = [0x7E, 0x0F, cmd, param, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+            let cs15 = 0;
+            for (let i = 0; i < raw15.length; i++) cs15 = (cs15 + raw15[i]) & 0xFF;
+            raw15.push(cs15);
+            framesToSend.push(new Uint8Array(raw15));
           }
 
-          // 2. Tulis juga ke 0xAE01 (Standar Serial / Passthrough JieLi)
-          try {
-            await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, CHAR_AE01, dataView);
-            sent = true;
-          } catch (e2) {}
+          // Cek pilihan dropdown Target Write di UI
+          const userChoice = (window.elements && window.elements.selWriteChar) ? window.elements.selWriteChar.value : 'ALL';
+          let targets = writableTargets;
 
-          // 3. Fallback jika user secara manual memilih 0xAE03 atau ALL
-          const userSel = (window.elements && window.elements.selWriteChar) ? window.elements.selWriteChar.value : '';
-          if (userSel === '0xAE03' || userSel === 'ALL') {
-            try {
-              await ble.writeWithoutResponse(targetDeviceId, SERVICE_UUID, CHAR_AE03, dataView);
-              sent = true;
-            } catch (e3) {}
+          if (userChoice && userChoice !== 'ALL') {
+            const matched = writableTargets.filter(t => t.shortName === userChoice || t.charUuid.toLowerCase().includes(userChoice.toLowerCase().replace('0x', '')));
+            if (matched.length > 0) targets = matched;
           }
 
-          if (!sent) {
-            console.warn('[BLEAdapter] write failed on all ports');
+          let anySuccess = false;
+          for (const frame of framesToSend) {
+            const dataView = new DataView(frame.buffer, frame.byteOffset, frame.byteLength);
+
+            for (const target of targets) {
+              try {
+                if (target.canNoResp) {
+                  await ble.writeWithoutResponse(targetDeviceId, target.serviceUuid, target.charUuid, dataView);
+                  anySuccess = true;
+                } else if (target.canWrite) {
+                  await ble.write(targetDeviceId, target.serviceUuid, target.charUuid, dataView, { timeout: 800 });
+                  anySuccess = true;
+                }
+              } catch (err1) {
+                // Fallback otomatis ke mode sebaliknya jika gagal
+                try {
+                  if (target.canWrite) {
+                    await ble.write(targetDeviceId, target.serviceUuid, target.charUuid, dataView, { timeout: 800 });
+                    anySuccess = true;
+                  } else if (target.canNoResp) {
+                    await ble.writeWithoutResponse(targetDeviceId, target.serviceUuid, target.charUuid, dataView);
+                    anySuccess = true;
+                  }
+                } catch (err2) {
+                  console.warn(`[BLEAdapter] Write ke ${target.shortName} error:`, err2);
+                }
+              }
+            }
+          }
+
+          if (!anySuccess && typeof logTerminal === 'function') {
+            logTerminal('SYS', '⚠️ Gagal mengirim data ke port Bluetooth modul', 'warn');
           }
         },
         async disconnect() {
