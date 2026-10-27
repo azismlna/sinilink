@@ -1,0 +1,18 @@
+{
+  "appId": "com.sinilink.controller",
+  "appName": "Sinilink",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Scanning for Sinilink XY-C100L...",
+        "cancel": "Cancel",
+        "availableDevices": "Available Devices",
+        "noDeviceFound": "No device found"
+      }
+    }
+  }
+}

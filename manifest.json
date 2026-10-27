@@ -1,0 +1,17 @@
+{
+  "name": "Sinilink XY-C100L Audio Controller",
+  "short_name": "Sinilink",
+  "description": "Smart Bluetooth Audio Controller & DSP Equalizer for Sinilink XY-C100L",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070b13",
+  "theme_color": "#06b6d4",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#06b6d4">
+  <meta name="application-name" content="Sinilink">
+  <link rel="manifest" href="manifest.json">
+  <title>SINILINK XY-C100L - Audio Controller &amp; DSP Tuning</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#ecfeff',
+              100: '#cffafe',
+              400: '#22d3ee',
+              500: '#06b6d4',
+              600: '#0891b2',
+              900: '#164e63',
+            }
+          },
+          boxShadow: {
+            'glow-cyan': '0 0 20px -3px rgba(6, 182, 212, 0.45)',
+            'glow-emerald': '0 0 20px -3px rgba(16, 185, 129, 0.45)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css">
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Outfit', sans-serif;
+    }
+    code, kbd, samp, pre, .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body class="bg-[#070b13] text-slate-100 min-h-[100dvh] overflow-x-hidden p-3 sm:p-5 selection:bg-cyan-500 selection:text-black relative overscroll-none">
+
+  <!-- Background Ambient Glow -->
+  <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div class="absolute -top-40 left-1/4 w-[600px] h-[400px] bg-cyan-600/10 blur-[140px] rounded-full"></div>
+    <div class="absolute -bottom-40 right-1/4 w-[600px] h-[400px] bg-emerald-600/10 blur-[140px] rounded-full"></div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- MAIN MODULAR BENTO GRID CONTAINER (Max Width 920px) -->
+  <main class="w-full max-w-[920px] mx-auto flex flex-col gap-4 relative z-10 select-none">
+
+    <!-- TOP HEADER BAR (Full Width Bento Card) -->
+    <header class="bento-card px-4 py-3 sm:px-6 sm:py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="relative flex items-center justify-center">
+          <div id="statusLedRing" class="hidden absolute w-3.5 h-3.5 rounded-full bg-emerald-500 led-ring"></div>
+          <div id="statusLedDot" class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.8)]"></div>
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-wider text-white font-mono flex items-center gap-1.5">
+              <span>SINILINK</span>
+            </h1>
+            <span class="px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-bold font-mono">XY-C100L</span>
+            <span id="demoBadge" class="hidden px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 text-[9px] font-bold">DEMO</span>
+          </div>
+          <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+            <span class="text-slate-400 font-semibold tracking-wider">XY-C100L AUDIO CONTROLLER</span>
+            <span>•</span>
+            <span id="connectionStateLabel" class="text-slate-300 font-bold">DISCONNECTED</span>
+            <span>•</span>
+            <span id="connectedDeviceName" class="text-slate-400 truncate max-w-[120px] sm:max-w-[200px]">No Device</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnConnect" class="h-10 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-extrabold text-xs shadow-glow-cyan transition flex items-center gap-2 active:scale-95">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M14.88 16.29L13 18.17V14.41M13 5.83l1.88 1.88-1.88 1.88M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4z"/></svg>
+          <span id="btnConnectLabel">Connect BLE</span>
+        </button>
+
+        <button id="btnDisconnect" class="hidden h-10 px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-bold text-xs transition active:scale-95">
+          Disconnect
+        </button>
+
+        <!-- Dev Tools / Settings Gear Icon -->
+        <button id="btnBleOptions" title="Settings & Developer Tools" class="w-10 h-10 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-cyan-300 transition flex items-center justify-center active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- BENTO 2-COLUMN GRID (Balanced on Desktop, Stack on Mobile) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+      <!-- LEFT COLUMN -->
+      <div class="flex flex-col gap-4">
+
+        <!-- KARTU 1: "MASTER VOLUME & DYNAMICS" (Hero Card) -->
+        <section class="bento-card p-4 sm:p-5 flex flex-col justify-between gap-3">
+          <!-- Card Header -->
+          <div class="flex items-center justify-between border-b border-slate-800/60 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>
+              <h2 class="text-xs font-extrabold tracking-wider text-slate-200 uppercase font-mono">Master Volume &amp; Dynamics</h2>
+            </div>
+            <div class="flex items-center gap-2 text-[10px] font-mono">
+              <span id="volDbLabel" class="text-cyan-400 font-bold">-3.0 dB</span>
+              <span class="text-slate-600">•</span>
+              <span id="volHexLabel" class="text-slate-400">0x1B</span>
+            </div>
+          </div>
+
+          <!-- Rotary Metallic Knob Container (Fixed Layer Separation Bug) -->
+          <div class="py-2 flex items-center justify-center">
+            <div id="rotaryKnob" class="relative w-[185px] h-[185px] sm:w-[200px] sm:h-[200px] flex items-center justify-center knob-container cursor-grab active:cursor-grabbing">
+              <svg class="w-full h-full transform -rotate-90 pointer-events-none" viewBox="0 0 240 240">
+                <defs>
+                  <linearGradient id="cyanEmeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#06b6d4"/>
+                    <stop offset="100%" stop-color="#10b981"/>
+                  </linearGradient>
+                  <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="3" result="blur"/>
+                    <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+                  </filter>
+                </defs>
+                <!-- Track bg -->
+                <circle cx="120" cy="120" r="95" fill="none" stroke="#141d2f" stroke-width="10" stroke-linecap="round" stroke-dasharray="447.67 596.9" stroke-dashoffset="-74.61"/>
+                <!-- Active Progress Arc -->
+                <circle id="knobSvgProgress" cx="120" cy="120" r="95" fill="none" stroke="url(#cyanEmeraldGrad)" stroke-width="10" stroke-linecap="round" filter="url(#glowFilter)" stroke-dasharray="447.67 596.9" stroke-dashoffset="447.67"/>
+              </svg>
+
+              <!-- 1. ROTATING INDICATOR LAYER ONLY (Pip rotates, text does NOT) -->
+              <div id="knobBody" class="absolute w-[135px] h-[135px] sm:w-[150px] sm:h-[150px] rounded-full bg-gradient-to-b from-slate-800 via-slate-900 to-[#080d1a] border-4 border-slate-700/80 shadow-[0_15px_30px_rgba(0,0,0,0.8),inset_0_2px_4px_rgba(255,255,255,0.15)] knob-indicator pointer-events-none">
+                <div class="absolute inset-2 rounded-full border border-slate-700/40"></div>
+                <!-- Indicator Pip at Top -->
+                <div class="absolute top-2 left-1/2 -translate-x-1/2 w-2 h-4 rounded-full bg-gradient-to-b from-cyan-300 to-cyan-500 shadow-[0_0_10px_#22d3ee]"></div>
+              </div>
+
+              <!-- 2. STATIC CENTER DISPLAY LAYER (Always Upright Horizontal) -->
+              <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+                <span id="knobVolVal" class="text-3xl sm:text-4xl font-extrabold tracking-tight text-white drop-shadow">27</span>
+                <span class="text-[9px] font-mono uppercase tracking-widest text-slate-400 mt-0.5">/ <span id="knobVolMax">29</span> MAX</span>
+                <span id="volPercentLabel" class="text-[10px] font-mono text-cyan-400 font-bold">93%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Horizontal Slider & Mini VU Meter -->
+          <div class="flex flex-col gap-2">
+            <input type="range" id="volumeSlider" min="0" max="29" value="27" class="w-full h-5 cursor-pointer">
+
+            <!-- Mini Stereo VU Meter -->
+            <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900/60 border border-slate-800/60">
+              <span class="text-[8px] font-mono text-slate-500 font-bold">L</span>
+              <div id="vuLeftTrack" class="flex-1 flex gap-0.5 h-1.5 rounded-full overflow-hidden"></div>
+              <span id="vuPeakL" class="hidden"></span>
+              <span class="text-[8px] font-mono text-slate-500 font-bold ml-1">R</span>
+              <div id="vuRightTrack" class="flex-1 flex gap-0.5 h-1.5 rounded-full overflow-hidden"></div>
+              <span id="vuPeakR" class="hidden"></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- KARTU 2: "NOW PLAYING & MEDIA TRANSPORT" (Kartu Khusus Media) -->
+        <section class="bento-card p-4 sm:p-5 flex flex-col justify-between gap-3">
+          <!-- Card Header -->
+          <div class="flex items-center justify-between border-b border-slate-800/60 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>
+              <h3 class="text-xs font-extrabold tracking-wider text-slate-200 uppercase font-mono">Now Playing &amp; Transport</h3>
+            </div>
+            <span id="playbackStatusBadge" class="text-[9px] font-mono text-slate-400 px-2.5 py-0.5 rounded-full bg-slate-900 border border-slate-800">READY</span>
+          </div>
+
+          <!-- Track Info with Vinyl Thumbnail & Visualizer -->
+          <div class="flex items-center gap-3.5 bg-slate-950/40 p-2.5 rounded-2xl border border-slate-800/60">
+            <!-- Vinyl Disc / Album Art Thumbnail (56x56) -->
+            <div class="relative w-14 h-14 shrink-0 rounded-2xl overflow-hidden bg-gradient-to-tr from-slate-900 via-slate-800 to-slate-900 p-1 flex items-center justify-center shadow-lg border border-slate-700/50">
+              <!-- Vinyl Disc SVG with Grooves -->
+              <div id="nowPlayingDisc" class="w-full h-full rounded-full bg-[#050811] border-2 border-slate-700 flex items-center justify-center relative shadow-inner">
+                <div class="w-6 h-6 rounded-full bg-gradient-to-tr from-cyan-600 to-emerald-600 flex items-center justify-center border border-white/30">
+                  <div class="w-2 h-2 rounded-full bg-black"></div>
+                </div>
+              </div>
+              <img id="nowPlayingArt" class="hidden absolute inset-0 w-full h-full object-cover rounded-2xl" alt="Album Art">
+            </div>
+
+            <!-- Title & Artist -->
+            <div class="flex-1 min-w-0">
+              <div id="nowPlayingTitle" class="text-sm font-bold text-white truncate">XY-C100L Bluetooth Stream</div>
+              <div id="nowPlayingArtist" class="text-xs text-slate-400 truncate mt-0.5">Sinilink Audio Engine • Spotify / Native</div>
+            </div>
+
+            <!-- Visualizer Soundbars -->
+            <div id="nowPlayingVisualizer" class="flex items-end gap-1 h-6 shrink-0 px-1">
+              <div class="now-playing-bar w-1 bg-cyan-400 rounded-full h-1"></div>
+              <div class="now-playing-bar w-1 bg-emerald-400 rounded-full h-1"></div>
+              <div class="now-playing-bar w-1 bg-cyan-300 rounded-full h-1"></div>
+              <div class="now-playing-bar w-1 bg-teal-400 rounded-full h-1"></div>
+            </div>
+          </div>
+
+          <!-- Transport Buttons Row -->
+          <div class="grid grid-cols-4 gap-2">
+            <!-- Mute Button -->
+            <button id="btnMuteToggle" class="tactile-btn h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 flex items-center justify-center gap-1.5 active:scale-95" title="Mute Toggle">
+              <svg id="muteIcon" class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+              </svg>
+              <span id="muteBtnLabel" class="text-[10px] font-mono font-bold">MUTE</span>
+            </button>
+
+            <!-- Prev Track -->
+            <button id="btnPrevTrack" class="tactile-btn h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95" title="Previous Track">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+            </button>
+
+            <!-- Play/Pause Button -->
+            <button id="btnPlayPause" class="tactile-btn h-11 rounded-xl bg-gradient-to-r from-cyan-600 to-emerald-600 hover:from-cyan-500 hover:to-emerald-500 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-glow-cyan active:scale-95" title="Play / Pause">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <span id="playPauseLabel">PLAY</span>
+            </button>
+
+            <!-- Next Track -->
+            <button id="btnNextTrack" class="tactile-btn h-11 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center active:scale-95" title="Next Track">
+              <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="flex flex-col gap-4">
+
+        <!-- KARTU 3: "INPUT SOURCE DECK" -->
+        <section class="bento-card p-4 sm:p-5 flex flex-col justify-between gap-3">
+          <!-- Card Header -->
+          <div class="flex items-center justify-between border-b border-slate-800/60 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_8px_#22d3ee]"></span>
+              <h3 class="text-xs font-extrabold tracking-wider text-slate-200 uppercase font-mono">Input Source Deck</h3>
+            </div>
+            <span id="activeSourceBadge" class="text-[10px] font-mono text-cyan-400 font-bold px-2.5 py-0.5 rounded-md bg-cyan-950/60 border border-cyan-800/60">BLUETOOTH</span>
+          </div>
+
+          <!-- 4 Dimensional Input Source Buttons (2x2 Grid) -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <!-- BT -->
+            <button data-source="BT" data-hex="7E 05 14 00 97" class="src-btn active tactile-btn h-16 rounded-2xl bg-cyan-950/80 border-2 border-cyan-400 text-cyan-200 flex flex-col items-center justify-center gap-1 shadow-glow-cyan">
+              <svg class="w-5 h-5 text-cyan-300" viewBox="0 0 24 24" fill="currentColor"><path d="M14.88 16.29L13 18.17V14.41M13 5.83l1.88 1.88-1.88 1.88M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4z"/></svg>
+              <span class="text-xs font-bold font-mono">BLUETOOTH (BT)</span>
+            </button>
+
+            <!-- USB PC -->
+            <button data-source="PC" data-hex="7E 05 15 00 98" class="src-btn tactile-btn h-16 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-1">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+              <span class="text-xs font-bold font-mono">USB SOUNDCARD</span>
+            </button>
+
+            <!-- AUX -->
+            <button data-source="AUX" data-hex="7E 05 16 00 99" class="src-btn tactile-btn h-16 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-1">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+              <span class="text-xs font-bold font-mono">AUX 3.5mm LINE</span>
+            </button>
+
+            <!-- U-Disk -->
+            <button data-source="USB" data-hex="7E 05 04 00 87" class="src-btn tactile-btn h-16 rounded-2xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-1">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+              <span class="text-xs font-bold font-mono">U-DISK FLASH DRIVE</span>
+            </button>
+          </div>
+        </section>
+
+        <!-- KARTU 4: "ACOUSTIC EQUALIZER & DSP CURVE" -->
+        <section class="bento-card p-4 sm:p-5 flex flex-col justify-between gap-3">
+          <!-- Card Header with Mode Tabs -->
+          <div class="flex items-center justify-between border-b border-slate-800/60 pb-2">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]"></span>
+              <h3 class="text-xs font-extrabold tracking-wider text-slate-200 uppercase font-mono">Acoustic EQ &amp; DSP Curve</h3>
+            </div>
+            
+            <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-xl border border-slate-800 text-[10px] font-mono">
+                <button id="btnEqTabPresets" type="button" class="px-2.5 py-1 rounded-lg bg-emerald-950/80 text-emerald-400 font-bold border border-emerald-700/60 transition shadow-glow-emerald">PRESETS</button>
+                <button id="btnEqTabManual" type="button" class="px-2.5 py-1 rounded-lg text-slate-400 hover:text-slate-200 transition">MANUAL EQ</button>
+              </div>
+              <span id="activeEqBadge" class="text-[10px] font-mono text-emerald-400 px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-800/60">NORMAL</span>
+            </div>
+          </div>
+
+          <!-- Mini SVG Frequency Response Curve Preview (Always Prominent at Top of EQ Card) -->
+          <div class="w-full h-14 bg-[#04060d] rounded-2xl p-1 border border-slate-800/80 relative overflow-hidden flex flex-col justify-end shadow-inner">
+            <svg id="eqCurveSvg" class="w-full h-full" viewBox="0 0 320 60" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="eqCurveGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#06b6d4" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.0"/>
+                </linearGradient>
+              </defs>
+              <line x1="0" y1="30" x2="320" y2="30" stroke="#1e293b" stroke-dasharray="2 3"/>
+              <path id="eqCurveArea" fill="url(#eqCurveGrad)" d="M 20 30 L 300 30 L 300 58 L 20 58 Z"/>
+              <path id="eqCurvePath" fill="none" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round" d="M 20 30 L 300 30"/>
+            </svg>
+            <div class="absolute top-1 left-2.5 flex items-center gap-1 text-[9px] font-mono text-cyan-400 font-semibold pointer-events-none">
+              <span>DSP FREQUENCY CURVE PREVIEW</span>
+            </div>
+          </div>
+
+          <!-- View 1: 6 Presets (3x2 Grid) -->
+          <div id="eqPresetsView" class="grid grid-cols-3 gap-2">
+            <button data-eq="Normal" data-hex="7E 05 09 00 8C" class="eq-btn active tactile-btn h-12 p-1.5 rounded-xl bg-emerald-950/70 border-2 border-emerald-400 text-white flex flex-col items-center justify-center gap-0.5 shadow-glow-emerald">
+              <svg class="w-3.5 h-3.5 text-emerald-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18"/></svg>
+              <span class="text-xs font-bold">Normal</span>
+            </button>
+            <button data-eq="Rock" data-hex="7E 05 0A 00 8D" class="eq-btn tactile-btn h-12 p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-0.5">
+              <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8c3 0 3 8 6 8s3-8 6-8 3 8 6 8"/></svg>
+              <span class="text-xs font-bold">Rock</span>
+            </button>
+            <button data-eq="Pop" data-hex="7E 05 0B 00 8E" class="eq-btn tactile-btn h-12 p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-0.5">
+              <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 15c4-2 5-6 9-6s5 4 9 6"/></svg>
+              <span class="text-xs font-bold">Pop</span>
+            </button>
+            <button data-eq="Classic" data-hex="7E 05 0C 00 8F" class="eq-btn tactile-btn h-12 p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-0.5">
+              <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9c4 4 6-4 9 0s5 4 9-2"/></svg>
+              <span class="text-xs font-bold">Classic</span>
+            </button>
+            <button data-eq="Jazz" data-hex="7E 05 0D 00 90" class="eq-btn tactile-btn h-12 p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-0.5">
+              <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14c3-2 6-4 9-2s6 4 9 0"/></svg>
+              <span class="text-xs font-bold">Jazz</span>
+            </button>
+            <button data-eq="Country" data-hex="7E 05 0E 00 91" class="eq-btn tactile-btn h-12 p-1.5 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-slate-800 text-slate-300 flex flex-col items-center justify-center gap-0.5">
+              <svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13c4 0 5-5 9-4s5 5 9 3"/></svg>
+              <span class="text-xs font-bold">Country</span>
+            </button>
+          </div>
+
+          <!-- View 2: Manual 7-Band Graphic Equalizer -->
+          <div id="eqManualView" class="hidden flex flex-col gap-2">
+            <!-- Overlap Warning -->
+            <div id="eqAcousticOverlapWarning" class="hidden p-1.5 rounded-xl bg-amber-950/50 border border-amber-600/60 text-amber-300 text-[9px] sm:text-[10px] font-mono flex items-center gap-1.5 animate-pulse">
+              <span>⚠️ Overlap 3–5kHz berpotensi harsh pada Woofer LG-6015 &amp; Tweeter Silk Dome.</span>
+            </div>
+
+            <!-- 7 Vertical Faders Grid -->
+            <div class="grid grid-cols-7 gap-1 bg-slate-900/50 p-2 rounded-2xl border border-slate-800/60 overflow-hidden">
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel0" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand0" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">60</div>
+              </div>
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel1" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand1" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">150</div>
+              </div>
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel2" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand2" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">400</div>
+              </div>
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel3" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand3" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">1k</div>
+              </div>
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel4" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand4" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">2.4k</div>
+              </div>
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel5" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand5" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">6k</div>
+              </div>
+              <div class="flex flex-col items-center gap-0.5">
+                <span id="eqLabel6" class="text-[9px] font-mono text-slate-400">0dB</span>
+                <div class="h-16 flex items-center justify-center">
+                  <input type="range" id="eqBand6" min="-12" max="12" step="1" value="0" orient="vertical" class="eq-slider">
+                </div>
+                <div class="text-[9px] font-bold font-mono text-slate-300">15k</div>
+              </div>
+            </div>
+
+            <!-- Quick Curves Toolbar -->
+            <div class="flex flex-wrap items-center justify-between gap-1">
+              <div class="flex items-center gap-1 text-[9px]">
+                <button id="btnEqReset" type="button" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono transition border border-slate-700">Flat</button>
+                <button id="btnEqBassBoost" type="button" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono transition border border-slate-700">Bass+</button>
+                <button id="btnEqTrebleBoost" type="button" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono transition border border-slate-700">Treble+</button>
+                <button id="btnEqVShape" type="button" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono transition border border-slate-700">V-Shape</button>
+                <button id="btnEqVocal" type="button" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono transition border border-slate-700">Vocal</button>
+              </div>
+              <div id="eqHardwareSyncText" class="text-[8px] font-mono text-cyan-400">⚡ Auto-Synced ke Hardware DSP: NORMAL</div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- DEVELOPER TOOLS & TECHNICAL LAB MODAL (Drawer Bottom Sheet on Mobile / Modal on Desktop) -->
+  <div id="devToolsModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-5 bg-black/80 backdrop-blur-md transition-opacity">
+    <div class="relative w-full max-w-2xl max-h-[86dvh] sm:max-h-[92vh] glass-panel rounded-t-[28px] sm:rounded-3xl p-4 sm:p-6 border-t-2 sm:border border-cyan-500/30 sm:border-slate-700 shadow-[0_-12px_40px_rgba(0,0,0,0.85)] sm:shadow-2xl flex flex-col gap-3.5 text-slate-200 overflow-y-auto overscroll-contain animate-slide-up sm:animate-none">
+      
+      <!-- Mobile Bottom Sheet Drag Handle Bar -->
+      <div class="w-12 h-1.5 bg-slate-600/80 hover:bg-slate-500 rounded-full mx-auto -mt-1 mb-1 sm:hidden cursor-pointer" onclick="document.getElementById('devToolsModal').classList.add('hidden')"></div>
+
+      <!-- Drawer Header -->
+      <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-cyan-950/80 border border-cyan-800/80 flex items-center justify-center text-cyan-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <div>
+            <h2 class="font-bold text-sm text-white">Developer Mode &amp; Technical Lab</h2>
+            <p class="text-[10px] text-slate-400 font-mono">Hardware Telemetry, BLE Console &amp; Hex Injector</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="btnMenuHelp" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-[10px]">Bantuan</button>
+          <button id="btnCloseDevModal" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel A: BLE Configuration & Advanced Settings -->
+      <div id="bleSettingsMenu" class="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col gap-3">
+        <h3 class="text-xs font-bold uppercase tracking-wider text-cyan-400">Pengaturan Koneksi BLE &amp; Perangkat</h3>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div class="flex flex-col gap-1">
+            <span class="text-slate-400 text-[11px]">Mode Scan BLE:</span>
+            <select id="selScanMode" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-mono text-[11px] focus:outline-none">
+              <option value="all" selected>Semua Perangkat (acceptAllDevices)</option>
+              <option value="filter">Filter: Sinilink-APP / XY-*</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <span class="text-slate-400 text-[11px]">Target Write Characteristic:</span>
+            <select id="selWriteChar" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-mono text-[11px] focus:outline-none">
+              <option value="0xAE10" selected>0xAE10 (Standar Utama Sinilink)</option>
+              <option value="0xAE03">0xAE03 (Write No-Response)</option>
+              <option value="0xAE01">0xAE01 (Alternative)</option>
+              <option value="ALL">ALL (Broadcast ke Semua)</option>
+            </select>
+            <select id="selManualChar" class="hidden"></select>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <span class="text-slate-400 text-[11px]">Skala Volume Maksimal:</span>
+            <select id="selMaxVolume" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-mono text-[11px] focus:outline-none">
+              <option value="29" selected>29 (0x1D | XY-C100L Native Hardware MAX)</option>
+              <option value="30">30 (0x1E | 31 Level)</option>
+              <option value="31">31 (0x1F | 32 Level)</option>
+            </select>
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <span class="text-slate-400 text-[11px]">Format Paket Perintah EQ:</span>
+            <select id="selEqPacketFormat" class="bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-cyan-300 font-mono text-[11px] focus:outline-none">
+              <option value="5byte" selected>5-Byte Short (7E 05 [CMD] 00 [CS])</option>
+              <option value="15byte">15-Byte Extended (7E 0F [CMD] 00 00... [CS])</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1 border-t border-slate-800">
+          <button id="btnToggleDemoMode" class="flex-1 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 font-semibold text-[11px] transition">
+            Toggle Demo Mode
+          </button>
+          <button id="btnDemoModeToggle" class="hidden"></button>
+
+          <button id="btnScanNew" class="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold text-[11px] transition">
+            Scan Baru
+          </button>
+
+          <button id="btnForgetDevice" class="py-1.5 px-3 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 border border-rose-800 text-rose-300 font-semibold text-[11px] transition">
+            Reset Cache BLE
+          </button>
+        </div>
+      </div>
+
+      <!-- Panel B: Hardware Registers (0xAE04 Telemetry) -->
+      <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Hardware Telemetry Registers (0xAE04)</span>
+          <button id="btnQueryStatus" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono text-[10px] border border-slate-700">Query (0x1F)</button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div class="p-2 rounded-xl bg-[#050811] border border-slate-800 flex flex-col">
+            <span class="text-[9px] text-slate-500 font-mono">PIN / PASS</span>
+            <span id="telemetryPassword" class="font-mono font-bold text-slate-200 mt-0.5">"----"</span>
+          </div>
+          <div class="p-2 rounded-xl bg-[#050811] border border-slate-800 flex flex-col">
+            <span class="text-[9px] text-slate-500 font-mono">PROMPT TONE</span>
+            <span id="telemetryTone" class="font-mono font-bold text-slate-400 mt-0.5">--</span>
+          </div>
+          <div class="p-2 rounded-xl bg-[#050811] border border-slate-800 flex flex-col">
+            <span class="text-[9px] text-slate-500 font-mono">LAST PACKET LEN</span>
+            <span id="telemetryPacketLen" class="font-mono font-bold text-slate-300 mt-0.5">0 bytes</span>
+          </div>
+          <div class="p-2 rounded-xl bg-[#050811] border border-slate-800 flex flex-col">
+            <span class="text-[9px] text-slate-500 font-mono">CHECKSUM STATUS</span>
+            <span id="telemetryChecksumStatus" class="font-mono font-bold text-slate-400 mt-0.5">READY</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel C: Custom Hex Payload Injector -->
+      <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col gap-2.5">
+        <span class="text-xs font-bold uppercase tracking-wider text-cyan-400">Custom Hex Payload Injector</span>
+        
+        <div class="flex items-center gap-2">
+          <input type="text" id="customHexInput" value="7E 05 1F 00" placeholder="e.g. 7E 05 01 00" class="flex-1 bg-[#050811] border border-slate-700 rounded-xl px-3 py-1.5 font-mono text-xs text-cyan-300 focus:outline-none focus:border-cyan-500">
+          <button id="btnSendHex" class="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs shadow-glow-cyan active:scale-95">
+            Kirim
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between text-[10px] font-mono text-slate-400">
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" id="chkAutoChecksum" checked class="w-3.5 h-3.5 rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+            <span>Auto Checksum 8-bit</span>
+          </label>
+          <div class="flex items-center gap-2">
+            <span>Bytes: <strong id="rawByteCount" class="text-slate-200">4</strong></span>
+            <span>CS: <strong id="previewChecksumBadge" class="text-emerald-400">0xA2</strong></span>
+          </div>
+        </div>
+
+        <div class="text-[9px] font-mono text-slate-400 truncate">
+          Final: <span id="finalPayloadPreview" class="text-cyan-300 font-bold">7E 05 1F 00 A2</span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-1 pt-1 border-t border-slate-800/80">
+          <button class="preset-chip px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono" data-hex="7E 05 1F 00">Poll (1F)</button>
+          <button class="preset-chip px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono" data-hex="7E 05 01 00">Play/Pause</button>
+          <button class="preset-chip px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono" data-hex="7E 05 15 00">Mode PC</button>
+          <button class="preset-chip px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono" data-hex="7E 05 09 00">EQ Normal</button>
+          <button class="preset-chip px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono" data-hex="7E 05 0A 00">EQ Rock</button>
+        </div>
+      </div>
+
+      <!-- Panel E: Live BLE Stream Terminal Console -->
+      <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col gap-2">
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <span class="font-bold uppercase tracking-wider text-cyan-400">Live BLE Stream Terminal</span>
+            <div class="flex items-center gap-1.5 text-[9px] font-mono">
+              <span class="text-emerald-400">RX: <strong id="rxPacketCount">0</strong></span>
+              <span class="text-slate-500">•</span>
+              <span class="text-cyan-400">TX: <strong id="txPacketCount">0</strong></span>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1">
+            <button id="filterAll" class="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-bold text-[10px]">ALL</button>
+            <button id="filterRx" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 text-[10px]">RX</button>
+            <button id="filterTx" class="px-2 py-0.5 rounded text-slate-400 hover:text-slate-200 text-[10px]">TX</button>
+            <button id="btnCopyLog" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 ml-1" title="Copy Log">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+            </button>
+            <button id="btnClearLog" class="p-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-300" title="Clear Log">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="terminalConsole" class="h-36 bg-[#04060c] rounded-xl p-2.5 font-mono text-xs overflow-y-auto flex flex-col gap-1 border border-slate-900">
+          <div class="text-slate-500 text-[10px] pb-1 border-b border-slate-900">
+            [SYS] Terminal siap. Sesi BLE Sinilink aktif.
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between text-[9px] font-mono text-slate-500">
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" id="chkAutoScroll" checked class="w-3 h-3 rounded bg-slate-800 border-slate-700 text-cyan-500 focus:ring-0">
+            <span>Auto Scroll</span>
+          </label>
+          <span>Port: 0xAE04 (Notify) • 0xAE10 (Write)</span>
+        </div>
+      </div>
+
+      <!-- Technical Elements Preserved in DOM for Script Completeness -->
+      <div class="hidden">
+        <button id="btnVolStepMinus5">-5</button>
+        <button id="btnVolStepMinus1">-1</button>
+        <button id="btnVolStepPlus1">+1</button>
+        <button id="btnVolStepPlus5">+5</button>
+        <span id="syncBadge"></span>
+        <span id="syncPulse"></span>
+        <span id="syncText"></span>
+        <div id="browserWarningBanner"><span id="browserWarningText"></span></div>
+        <div id="btnToggleLab"></div>
+        <div id="studioLabBody"></div>
+        <div id="labArrow"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- BLE Reconnection Help Modal -->
+  <div id="bleHelpModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="relative w-full max-w-lg glass-panel rounded-3xl p-6 sm:p-7 border border-slate-700 shadow-2xl flex flex-col gap-4 text-slate-200">
+      <div class="flex items-start justify-between pb-3 border-b border-slate-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800/80 flex items-center justify-center text-cyan-400">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-white">Panduan Re-koneksi Sinilink-APP</h3>
+            <p class="text-[11px] text-slate-400 font-mono">Mengapa modul tidak muncul saat scan &amp; cara sambung cepat</p>
+          </div>
+        </div>
+        <button id="btnCloseBleHelp" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="flex flex-col gap-3 text-xs text-slate-300 max-h-[70vh] overflow-y-auto pr-1">
+        <div class="p-3.5 rounded-2xl bg-slate-900/90 border border-slate-800 flex flex-col gap-1.5">
+          <span class="font-bold text-amber-300">❓ Mengapa harus "Remove Device" agar muncul di Scan?</span>
+          <p class="leading-relaxed text-slate-400">Chip Bluetooth JieLi (JL AC69xx) hanya mengizinkan 1 koneksi BLE aktif. Saat sudah paired atau terhubung di HP/PC lain, siaran paket advertising otomatis dimatikan.</p>
+        </div>
+        <div class="p-3.5 rounded-2xl bg-emerald-950/40 border border-emerald-800/50 flex flex-col gap-1.5">
+          <span class="font-bold text-emerald-300">⚡ Solusi Praktis: Gunakan "Sambung Cepat" (Tanpa Scan!)</span>
+          <p class="leading-relaxed text-slate-300">Cukup klik tombol "Connect BLE" di dashboard. Browser langsung membuka sesi GATT ke perangkat tersimpan tanpa scan ulang!</p>
+        </div>
+      </div>
+
+      <button id="btnDismissBleHelp" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-bold text-xs shadow-glow-cyan transition active:scale-95">
+        Saya Mengerti, Tutup
+      </button>
+      <button id="btnBleHelp" class="hidden"></button>
+    </div>
+  </div>
+
+  <!-- MODULAR JAVASCRIPT APPLICATION LOGIC -->
+  <script src="js/constants.js" defer></script>
+  <script src="js/state.js" defer></script>
+  <script src="js/elements.js" defer></script>
+  <script src="js/protocol.js" defer></script>
+  <script src="js/native-bridge.js" defer></script>
+  <script src="js/ui.js" defer></script>
+  <script src="js/ble.js" defer></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
